@@ -1,0 +1,128 @@
+{
+  "name": "_system - Error Alerts",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ec1bb342-a9b2-43dc-9090-d6db576d3f34",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "=<b>תקלה ב-workflow</b>\n<b>Workflow:</b> {{ $json.workflowName }}\n<b>צומת:</b> {{ $json.failedNode }}\n<b>שגיאה:</b> {{ $json.errorMessage }}\n<b>זמן:</b> {{ $json.time }}\n{{ $json.executionUrl ? '<a href=\"' + $json.executionUrl + '\">פתיחת ההרצה</a>' : '' }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "ebc771dc-f27d-44b9-9e72-e4e59681991e",
+      "name": "Send Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "id": "3db156b9-d71e-44a2-b971-afa83a368aad",
+      "name": "Read Error Details",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1",
+              "name": "workflowName",
+              "type": "string",
+              "value": "={{ String($json.workflow?.name ?? 'לא ידוע').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}"
+            },
+            {
+              "id": "e2",
+              "name": "failedNode",
+              "type": "string",
+              "value": "={{ String($json.execution?.lastNodeExecuted ?? ($json.trigger?.error ? 'Trigger' : 'לא ידוע')).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}"
+            },
+            {
+              "id": "e3",
+              "name": "errorMessage",
+              "type": "string",
+              "value": "={{ String($json.execution?.error?.message ?? $json.trigger?.error?.message ?? 'אין הודעת שגיאה').slice(0, 800).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}"
+            },
+            {
+              "id": "e4",
+              "name": "executionUrl",
+              "type": "string",
+              "value": "={{ $json.execution?.url ?? '' }}"
+            },
+            {
+              "id": "e5",
+              "name": "time",
+              "type": "string",
+              "value": "={{ $now.setZone('Asia/Jerusalem').toFormat('dd/MM/yyyy HH:mm') }}"
+            }
+          ]
+        },
+        "mode": "manual",
+        "options": {}
+      }
+    },
+    {
+      "id": "a1f0c3d2-0000-4000-8000-000000000001",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ],
+      "parameters": {
+        "content": "## _system - Error Alerts\nworkflow משותף לטיפול בשגיאות: כל workflow שנכשל בהרצה אמיתית מפעיל אותו.\nError Trigger -> Read Error Details (escape לתווים מיוחדים) -> התראה בטלגרם עם שם ה-workflow, הצומת שנכשל, הודעת השגיאה, השעה וקישור להרצה.\nחשוב: צריך לפרסם (Publish) אותו לפני שמחברים אליו workflows אחרים, ובכל workflow להגדיר Settings -> Error workflow.\nצריך: Telegram.",
+        "width": 560,
+        "height": 260,
+        "color": 4
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Error Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Error Details": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jerusalem"
+  },
+  "pinData": {}
+}

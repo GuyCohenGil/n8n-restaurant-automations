@@ -1,0 +1,384 @@
+{
+  "name": "DEMO R4 - Weekly Food Cost Report",
+  "nodes": [
+    {
+      "id": "7ed011ed-c4c4-49e9-b39c-2b77593acea7",
+      "name": "Every Sunday 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        96
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                0
+              ],
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "5721ac25-2530-4714-b3f8-6021ceb4f545",
+      "name": "Load Weekly Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        96
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "w1",
+              "name": "netSales",
+              "type": "number",
+              "value": 128400
+            },
+            {
+              "id": "w2",
+              "name": "targetPct",
+              "type": "number",
+              "value": 30
+            },
+            {
+              "id": "w3",
+              "name": "purchases",
+              "type": "array",
+              "value": "={{ [\n  { category: \"בשר ועוף\", amount: 15200 },\n  { category: \"דגים\", amount: 6800 },\n  { category: \"ירקות ופירות\", amount: 7900 },\n  { category: \"מוצרי חלב\", amount: 5300 },\n  { category: \"יבשים\", amount: 4100 }\n] }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d353ffc8-6d9f-4deb-8d9a-f23b7f403e36",
+      "name": "Has Sales Data?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "sales",
+              "leftValue": "={{ $json.netSales }}",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "rightValue": 0
+            },
+            {
+              "id": "purch",
+              "leftValue": "={{ $json.purchases }}",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "966668dd-a06e-4b55-a388-950e87743bcd",
+      "name": "Split Purchases",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "fieldToSplitOut": "purchases",
+        "include": "selectedOtherFields",
+        "fieldsToInclude": "netSales,targetPct",
+        "options": {
+          "destinationFieldName": "purchase"
+        }
+      }
+    },
+    {
+      "id": "ffb34641-c256-423f-8614-bf67fbf83769",
+      "name": "Sort By Amount",
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "type": "simple",
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "purchase.amount",
+              "order": "descending"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3c6d34a8-ee92-4670-9731-cacf98f8dd4d",
+      "name": "Collect Purchases",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "rows",
+        "options": {}
+      }
+    },
+    {
+      "id": "991bb16c-bf80-4aa2-b193-74374aeeb610",
+      "name": "Build Food Cost Report",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1344,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "netSales",
+              "type": "number",
+              "value": "={{ $json.rows[0].netSales }}"
+            },
+            {
+              "id": "f2",
+              "name": "totalPurchases",
+              "type": "number",
+              "value": "={{ $json.rows.reduce((sum, r) => sum + r.purchase.amount, 0) }}"
+            },
+            {
+              "id": "f3",
+              "name": "foodCostPct",
+              "type": "number",
+              "value": "={{ Math.round($json.rows.reduce((sum, r) => sum + r.purchase.amount, 0) / $json.rows[0].netSales * 1000) / 10 }}"
+            },
+            {
+              "id": "f4",
+              "name": "targetPct",
+              "type": "number",
+              "value": "={{ $json.rows[0].targetPct }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c09562fc-1c7f-4d4f-a0ba-54fcbf300adb",
+      "name": "Build Report Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1568,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "message",
+              "type": "string",
+              "value": "=<b>דוח עלות מזון שבועי</b>\n{{ $now.setZone(\"Asia/Jerusalem\").minus({ days: 7 }).toFormat(\"dd/MM\") }} – {{ $now.setZone(\"Asia/Jerusalem\").minus({ days: 1 }).toFormat(\"dd/MM\") }}\n\nמכירות נטו: {{ $json.netSales.toLocaleString(\"he-IL\") }} ₪\nרכש מזון: {{ $json.totalPurchases.toLocaleString(\"he-IL\") }} ₪\n<b>עלות מזון: {{ $json.foodCostPct }}%</b> (יעד {{ $json.targetPct }}%, {{ $json.foodCostPct > $json.targetPct ? \"מעל היעד ב-\" + Math.round(($json.foodCostPct - $json.targetPct) * 10) / 10 + \" נקודות\" : \"בתוך היעד\" }})\n\nשלוש הקטגוריות הגדולות:\n{{ $(\"Collect Purchases\").first().json.rows.slice(0, 3).map(r => \"• \" + r.purchase.category + \": \" + r.purchase.amount.toLocaleString(\"he-IL\") + \" ₪ (\" + Math.round(r.purchase.amount / $json.totalPurchases * 100) + \"% מהרכש)\").join(\"\\n\") }}\n\nנתוני הדגמה"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b4aa9d01-b5f9-4e6d-b775-00ff7ce731e4",
+      "name": "Send Food Cost Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1792,
+        0
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "retryOnFail": true
+    },
+    {
+      "id": "243c89d3-67e5-4d8a-a32e-3fa969cf1f02",
+      "name": "Reject Missing Data",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        672,
+        192
+      ],
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "=אין נתוני מכירות או רכש לשבוע, אי אפשר לחשב עלות מזון. מכירות: {{ $json.netSales }}, שורות רכש: {{ ($json.purchases ?? []).length }}"
+      }
+    },
+    {
+      "id": "838e6333-4607-4edb-869c-3b116a76fbf3",
+      "name": "Sticky Note ba0137e2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ],
+      "parameters": {
+        "content": "## DEMO R4 - Weekly Food Cost Report\nכל יום ראשון ב-08:00: נתוני השבוע -> Has Sales Data? -> פיצול הרכש לקטגוריות -> מיון לפי סכום -> חישוב עלות מזון באחוזים מול היעד -> דוח למנהל.\nאין מכירות או רכש -> Stop and Error -> התראה.\nבעבודה אמיתית: הרכש מטבלת תעודות המשלוח, המכירות מהקופה.\nצריך: Telegram.",
+        "width": 560,
+        "height": 260,
+        "color": 4
+      }
+    }
+  ],
+  "connections": {
+    "Every Sunday 08:00": {
+      "main": [
+        [
+          {
+            "node": "Load Weekly Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Weekly Data": {
+      "main": [
+        [
+          {
+            "node": "Has Sales Data?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Sales Data?": {
+      "main": [
+        [
+          {
+            "node": "Split Purchases",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Missing Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Purchases": {
+      "main": [
+        [
+          {
+            "node": "Sort By Amount",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort By Amount": {
+      "main": [
+        [
+          {
+            "node": "Collect Purchases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Purchases": {
+      "main": [
+        [
+          {
+            "node": "Build Food Cost Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Food Cost Report": {
+      "main": [
+        [
+          {
+            "node": "Build Report Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report Message": {
+      "main": [
+        [
+          {
+            "node": "Send Food Cost Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jerusalem"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,513 @@
+{
+  "name": "DEMO R2 - Delivery Note Price Check",
+  "nodes": [
+    {
+      "id": "3c081f4d-e401-4acf-8d81-139fd1d0b346",
+      "name": "Delivery Note Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        192
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "demo-r2-price-check",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "dc255117-cc94-4301-b5bc-5c9705d34390"
+    },
+    {
+      "id": "9cb3aa2e-3a33-4703-b2d5-a72abd14d461",
+      "name": "Read Delivery Note",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        192
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "supplier",
+              "type": "string",
+              "value": "={{ String($json.body?.supplier ?? \"\").trim() }}"
+            },
+            {
+              "id": "r2",
+              "name": "date",
+              "type": "string",
+              "value": "={{ String($json.body?.date ?? \"\") }}"
+            },
+            {
+              "id": "r3",
+              "name": "lines",
+              "type": "array",
+              "value": "={{ Array.isArray($json.body?.lines) ? $json.body.lines : [] }}"
+            },
+            {
+              "id": "r4",
+              "name": "priceList",
+              "type": "object",
+              "value": "={{ ({\n  \"ירקות השרון\": { \"עגבניות\": 6.5, \"מלפפונים\": 5.9, \"בצל\": 3.8 },\n  \"עופות הגליל\": { \"חזה עוף\": 38, \"כרעיים\": 24 },\n  \"מחלבת הכפר\": { \"שמנת 38%\": 14.5, \"חמאה\": 42 }\n})[String($json.body?.supplier ?? \"\").trim()] ?? {} }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "72318712-e94f-497f-864a-3e1f069edbea",
+      "name": "Validate",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        192
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "v1",
+              "name": "validationError",
+              "type": "string",
+              "value": "={{ [\n  $json.supplier ? \"\" : \"חסר שם ספק\",\n  $json.supplier && Object.keys($json.priceList).length === 0 ? \"ספק לא מוכר במחירון: \" + $json.supplier : \"\",\n  $json.lines.length > 0 ? \"\" : \"אין שורות מוצרים\",\n  $json.lines.some(l => !l.item || isNaN(Number(l.qty)) || isNaN(Number(l.price))) ? \"יש שורה בלי פריט, כמות או מחיר\" : \"\"\n].filter(e => e).join(\"; \") }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b56135be-1dc2-4378-b1af-c7d17ae139a0",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        192
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "no-errors",
+              "leftValue": "={{ $json.validationError }}",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "60d657d8-acf9-4b5e-aded-f62532beeeed",
+      "name": "Split Lines",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        896,
+        96
+      ],
+      "parameters": {
+        "fieldToSplitOut": "lines",
+        "include": "selectedOtherFields",
+        "fieldsToInclude": "supplier,date,priceList",
+        "options": {
+          "destinationFieldName": "noteLine"
+        }
+      }
+    },
+    {
+      "id": "b2ff5e50-f303-43dd-a276-3f0a9e6842f4",
+      "name": "Compare To Agreed Price",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1120,
+        96
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "supplier",
+              "type": "string",
+              "value": "={{ $json.supplier }}"
+            },
+            {
+              "id": "p2",
+              "name": "date",
+              "type": "string",
+              "value": "={{ $json.date }}"
+            },
+            {
+              "id": "p3",
+              "name": "item",
+              "type": "string",
+              "value": "={{ $json.noteLine.item }}"
+            },
+            {
+              "id": "p4",
+              "name": "agreedPrice",
+              "type": "number",
+              "value": "={{ $json.priceList[$json.noteLine.item] ?? null }}"
+            },
+            {
+              "id": "p5",
+              "name": "extraCost",
+              "type": "number",
+              "value": "={{ $json.priceList[$json.noteLine.item] === undefined ? 0 : Math.max(0, Math.round((Number($json.noteLine.price) - $json.priceList[$json.noteLine.item]) * Number($json.noteLine.qty) * 100) / 100) }}"
+            },
+            {
+              "id": "p6",
+              "name": "isDeviation",
+              "type": "boolean",
+              "value": "={{ $json.priceList[$json.noteLine.item] === undefined || Number($json.noteLine.price) > $json.priceList[$json.noteLine.item] + 0.009 }}"
+            },
+            {
+              "id": "p7",
+              "name": "line",
+              "type": "string",
+              "value": "={{ '• ' + String($json.noteLine.item).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + ': ' + ($json.priceList[$json.noteLine.item] === undefined ? 'פריט שלא מופיע במחירון' : $json.noteLine.price + ' ₪ במקום ' + $json.priceList[$json.noteLine.item] + ' ₪ (+' + Math.round((Number($json.noteLine.price) - $json.priceList[$json.noteLine.item]) / $json.priceList[$json.noteLine.item] * 100) + '%), תוספת ' + Math.round((Number($json.noteLine.price) - $json.priceList[$json.noteLine.item]) * Number($json.noteLine.qty) * 100) / 100 + ' ₪') }}"
+            }
+          ]
+        },
+        "options": {
+          "ignoreConversionErrors": true
+        }
+      }
+    },
+    {
+      "id": "a07191aa-90d3-446a-8df8-c3a612360cfe",
+      "name": "Collect Lines",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        96
+      ],
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "lines",
+        "options": {}
+      }
+    },
+    {
+      "id": "9bcf4314-1d29-4b37-a47f-088c67346807",
+      "name": "Build Check Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1568,
+        96
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1",
+              "name": "supplier",
+              "type": "string",
+              "value": "={{ $json.lines[0].supplier }}"
+            },
+            {
+              "id": "b2",
+              "name": "linesChecked",
+              "type": "number",
+              "value": "={{ $json.lines.length }}"
+            },
+            {
+              "id": "b3",
+              "name": "deviationsCount",
+              "type": "number",
+              "value": "={{ $json.lines.filter(l => l.isDeviation).length }}"
+            },
+            {
+              "id": "b4",
+              "name": "extraCost",
+              "type": "number",
+              "value": "={{ Math.round($json.lines.reduce((sum, l) => sum + l.extraCost, 0) * 100) / 100 }}"
+            },
+            {
+              "id": "b5",
+              "name": "hasDeviations",
+              "type": "boolean",
+              "value": "={{ $json.lines.some(l => l.isDeviation) }}"
+            },
+            {
+              "id": "b6",
+              "name": "message",
+              "type": "string",
+              "value": "=<b>חריגת מחיר בתעודת משלוח</b>\nספק: {{ String($json.lines[0].supplier).replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}{{ $json.lines[0].date ? \" · \" + $json.lines[0].date : \"\" }}\n\n{{ $json.lines.filter(l => l.isDeviation).map(l => l.line).join(\"\\n\") }}\n\n<b>סה״כ תוספת: {{ Math.round($json.lines.reduce((sum, l) => sum + l.extraCost, 0) * 100) / 100 }} ₪</b>"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b61a2c04-0a49-450e-a0df-6db27f240176",
+      "name": "Respond With Check Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1792,
+        96
+      ],
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      }
+    },
+    {
+      "id": "ebb85537-09e1-4556-9ef1-b38f91f7444e",
+      "name": "Any Price Deviations?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2016,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-dev",
+              "leftValue": "={{ $json.hasDeviations }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "fd0fd1a4-9baa-4f89-b66d-b266c13e714d",
+      "name": "Alert Manager on Deviation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2240,
+        0
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "retryOnFail": true
+    },
+    {
+      "id": "0379b0ea-544f-4f37-868f-d1d184f8105f",
+      "name": "Prices OK",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2240,
+        192
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "987525bc-5ddc-46ca-af03-0ba721ecfd29",
+      "name": "Reject Invalid Note",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        896,
+        288
+      ],
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "=תעודת משלוח לא תקינה: {{ $json.validationError }}"
+      }
+    },
+    {
+      "id": "08e9fa58-aba0-47bf-ae13-b8541e630991",
+      "name": "Sticky Note 350259df",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -320
+      ],
+      "parameters": {
+        "content": "## DEMO R2 - Delivery Note Price Check\nתעודת משלוח (בעבודה אמיתית: שורות שחולצו מצילום) -> Read Delivery Note -> Validate -> Is Valid?\nלא תקין -> Stop and Error -> התראה מ-_system - Error Alerts.\nתקין -> פיצול לשורות -> השוואה למחיר המוסכם -> סיכום -> תשובה לשולח -> Any Price Deviations? -> התראה למנהל.\nהמחירון נמצא ב-Read Delivery Note. בעבודה אמיתית: טבלת מחירים מוסכמים ב-Airtable.\nצריך: Telegram.",
+        "width": 640,
+        "height": 280,
+        "color": 4
+      }
+    }
+  ],
+  "connections": {
+    "Delivery Note Received": {
+      "main": [
+        [
+          {
+            "node": "Read Delivery Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Delivery Note": {
+      "main": [
+        [
+          {
+            "node": "Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Split Lines",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Invalid Note",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Lines": {
+      "main": [
+        [
+          {
+            "node": "Compare To Agreed Price",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare To Agreed Price": {
+      "main": [
+        [
+          {
+            "node": "Collect Lines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Lines": {
+      "main": [
+        [
+          {
+            "node": "Build Check Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Check Result": {
+      "main": [
+        [
+          {
+            "node": "Respond With Check Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond With Check Result": {
+      "main": [
+        [
+          {
+            "node": "Any Price Deviations?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Price Deviations?": {
+      "main": [
+        [
+          {
+            "node": "Alert Manager on Deviation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prices OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jerusalem"
+  },
+  "pinData": {}
+}

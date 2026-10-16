@@ -1,0 +1,1175 @@
+{
+  "name": "DEMO R1b - Count to Order Draft",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "demo-r1-count",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "19bce176-1fcd-4408-b9c0-6f8195d265fa",
+      "name": "Count Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        96
+      ],
+      "webhookId": "737e677d-d4dd-43f7-8fe2-368a25c1d531"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "supplier",
+              "type": "string",
+              "value": "={{ String($json.body?.supplier ?? \"\").trim() }}"
+            },
+            {
+              "id": "r2",
+              "name": "countedBy",
+              "type": "string",
+              "value": "={{ String($json.body?.countedBy ?? \"\").trim() || \"צוות\" }}"
+            },
+            {
+              "id": "r3",
+              "name": "lines",
+              "type": "array",
+              "value": "={{ String($json.body?.text ?? \"\").split(/\\n|,/).map(l => l.trim()).filter(l => l).map(l => ({ raw: l, m: l.match(/^(.+?)\\s+(\\d+(?:[.]\\d+)?)$/) })).map(x => x.m ? { name: x.m[1].trim(), qty: Number(x.m[2]) } : { raw: x.raw }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d1569ee8-3f0f-41b3-9d49-4c856ee235a6",
+      "name": "Read Count Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "v1",
+              "name": "validationError",
+              "type": "string",
+              "value": "={{ [!$json.supplier ? \"חסר שם ספק\" : \"\", $json.lines.length === 0 ? \"הודעת ספירה ריקה\" : \"\", $json.lines.some(l => !l.name) ? \"שורות בלי כמות: \" + $json.lines.filter(l => !l.name).map(l => l.raw).join(\", \") : \"\"].filter(e => e).join(\"; \") }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "e7d35a92-656b-45f1-9fde-ff3199755c74",
+      "name": "Validate Count",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json.validationError }}",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dba281d2-f26d-4164-9682-0eb859f18e0c",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Suppliers"
+        },
+        "filterByFormula": "=AND({Active}, {Supplier} = \"{{ $json.supplier.replace(/\"/g, \"\") }}\")",
+        "options": {}
+      },
+      "id": "e8776edd-312e-4dc1-a3b7-43edd42e530d",
+      "name": "Get Supplier",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        96
+      ],
+      "retryOnFail": true,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "found",
+              "leftValue": "={{ $json.id ?? \"\" }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1e6a8cfc-1200-49f6-ab44-3b56b6769e0a",
+      "name": "Supplier Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Items"
+        },
+        "filterByFormula": "=AND({Active}, FIND(\"{{ $json.fields.Supplier }}\", ARRAYJOIN({Supplier Name})))",
+        "options": {}
+      },
+      "id": "b7423a4b-0346-4690-be3f-89a4a46bdd79",
+      "name": "Get Supplier Items",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        96
+      ],
+      "executeOnce": true,
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1",
+              "name": "itemId",
+              "type": "string",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "id": "c2",
+              "name": "item",
+              "type": "string",
+              "value": "={{ $json.fields.Item }}"
+            },
+            {
+              "id": "c3",
+              "name": "unit",
+              "type": "string",
+              "value": "={{ $json.fields[\"Count Unit\"] }}"
+            },
+            {
+              "id": "c4",
+              "name": "packName",
+              "type": "string",
+              "value": "={{ $json.fields[\"Pack Name\"] }}"
+            },
+            {
+              "id": "c5",
+              "name": "packSize",
+              "type": "number",
+              "value": "={{ $json.fields[\"Pack Size\"] || 1 }}"
+            },
+            {
+              "id": "c6",
+              "name": "dailyUsage",
+              "type": "number",
+              "value": "={{ $json.fields[\"Daily Usage\"] || 0 }}"
+            },
+            {
+              "id": "c7",
+              "name": "safetyStock",
+              "type": "number",
+              "value": "={{ $json.fields[\"Safety Stock\"] || 0 }}"
+            },
+            {
+              "id": "c8",
+              "name": "counted",
+              "type": "boolean",
+              "value": "={{ $(\"Validate Count\").first().json.lines.some(l => l.name === $json.fields.Item) }}"
+            },
+            {
+              "id": "c9",
+              "name": "onHand",
+              "type": "number",
+              "value": "={{ $(\"Validate Count\").first().json.lines.find(l => l.name === $json.fields.Item)?.qty ?? 0 }}"
+            },
+            {
+              "id": "c10",
+              "name": "coverageDays",
+              "type": "number",
+              "value": "={{ (($(\"Get Supplier\").first().json.fields[\"Order Days\"] || []).map(d => [\"ראשון\", \"שני\", \"שלישי\", \"רביעי\", \"חמישי\", \"שישי\", \"שבת\"].indexOf(d)).sort((a, b) => a - b).find(d => d > $now.setZone(\"Asia/Jerusalem\").weekday % 7) ?? ((($(\"Get Supplier\").first().json.fields[\"Order Days\"] || []).map(d => [\"ראשון\", \"שני\", \"שלישי\", \"רביעי\", \"חמישי\", \"שישי\", \"שבת\"].indexOf(d)).sort((a, b) => a - b)[0] ?? 0) + 7)) - $now.setZone(\"Asia/Jerusalem\").weekday % 7 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9d85748c-1bda-4b1e-b17a-4905a6c14201",
+      "name": "Match Count To Item",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1568,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "neededQty",
+              "type": "number",
+              "value": "={{ Math.round(($json.dailyUsage * $json.coverageDays + $json.safetyStock - $json.onHand) * 100) / 100 }}"
+            },
+            {
+              "id": "s2",
+              "name": "packs",
+              "type": "number",
+              "value": "={{ $json.counted ? Math.max(0, Math.ceil(($json.dailyUsage * $json.coverageDays + $json.safetyStock - $json.onHand) / $json.packSize)) : 0 }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "b3718891-9ee7-4f2a-afd8-264ce7b4b1ca",
+      "name": "Calculate Suggestion",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1792,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "rows",
+        "options": {}
+      },
+      "id": "ed5478ae-17ac-4f1f-b991-bff8579a0505",
+      "name": "Collect Rows",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "o1",
+              "name": "supplier",
+              "type": "string",
+              "value": "={{ $(\"Get Supplier\").first().json.fields.Supplier }}"
+            },
+            {
+              "id": "o2",
+              "name": "supplierId",
+              "type": "string",
+              "value": "={{ $(\"Get Supplier\").first().json.id }}"
+            },
+            {
+              "id": "o3",
+              "name": "orderDate",
+              "type": "string",
+              "value": "={{ $now.setZone(\"Asia/Jerusalem\").toFormat(\"yyyy-MM-dd\") }}"
+            },
+            {
+              "id": "o4",
+              "name": "deliveryDate",
+              "type": "string",
+              "value": "={{ $now.setZone(\"Asia/Jerusalem\").plus({ days: $(\"Get Supplier\").first().json.fields[\"Lead Days\"] || 1 }).toFormat(\"yyyy-MM-dd\") }}"
+            },
+            {
+              "id": "o5",
+              "name": "countedBy",
+              "type": "string",
+              "value": "={{ $(\"Validate Count\").first().json.countedBy }}"
+            },
+            {
+              "id": "o6",
+              "name": "countedRows",
+              "type": "array",
+              "value": "={{ $json.rows.filter(r => r.counted) }}"
+            },
+            {
+              "id": "o7",
+              "name": "notCounted",
+              "type": "array",
+              "value": "={{ $json.rows.filter(r => !r.counted).map(r => r.item) }}"
+            },
+            {
+              "id": "o8",
+              "name": "unknownNames",
+              "type": "array",
+              "value": "={{ $(\"Validate Count\").first().json.lines.filter(l => !$json.rows.some(r => r.item === l.name)).map(l => l.name) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "45248206-a2a4-4d0f-920d-c0b06544e736",
+      "name": "Prepare Order",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2240,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "m",
+              "leftValue": "={{ $json.countedRows }}",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2d314a45-77f9-440d-a586-f58bf2d7bffe",
+      "name": "Any Item Matched?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2464,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Orders"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Order": "={{ $json.supplier }} – {{ DateTime.fromISO($json.orderDate).toFormat(\"dd/MM\") }}",
+            "Order Date": "={{ $json.orderDate }}",
+            "Delivery Date": "={{ $json.deliveryDate }}",
+            "Status": "Draft",
+            "Supplier": "={{ [$json.supplierId] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Order",
+              "displayName": "Order",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Order Date",
+              "displayName": "Order Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Delivery Date",
+              "displayName": "Delivery Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Supplier",
+              "displayName": "Supplier",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "5bd916c8-b910-482b-9fb1-57b24ddc2dda",
+      "name": "Create Draft Order",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2688,
+        96
+      ],
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "orderId",
+              "type": "string",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "id": "a2",
+              "name": "orderName",
+              "type": "string",
+              "value": "={{ $json.fields?.Order ?? $json.Order }}"
+            },
+            {
+              "id": "a3",
+              "name": "countedRows",
+              "type": "array",
+              "value": "={{ $(\"Prepare Order\").first().json.countedRows.map(r => ({ ...r, orderId: $json.id, orderDate: $(\"Prepare Order\").first().json.orderDate, countedBy: $(\"Prepare Order\").first().json.countedBy })) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ae513244-1033-4887-bb1c-c466dc2648ff",
+      "name": "Attach Order Id",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2912,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "=אף שורה בספירה לא תואמת פריט של {{ $json.supplier }}. לא זוהו: {{ $json.unknownNames.join(\", \") }}"
+      },
+      "id": "467f7758-03e8-4347-9b6b-1a4d7d46891f",
+      "name": "Reject Unmatched Count",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        2688,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "=ספק לא מוכר או לא פעיל: {{ $(\"Validate Count\").first().json.supplier }}"
+      },
+      "id": "34054fd3-deff-41f4-9f40-c89523af0515",
+      "name": "Reject Unknown Supplier",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "=ספירה לא תקינה: {{ $json.validationError }}"
+      },
+      "id": "83d63e92-1615-4ce4-bb78-95a039c73f28",
+      "name": "Reject Invalid Count",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        896,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "countedRows",
+        "options": {}
+      },
+      "id": "03e38318-c025-4b42-aebb-990c29e17351",
+      "name": "Split Counted Items",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        3136,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Counts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Count": "={{ $json.item }} – {{ DateTime.fromISO($json.orderDate).toFormat(\"dd/MM\") }}",
+            "Date": "={{ $json.orderDate }}",
+            "Qty": "={{ $json.onHand }}",
+            "Counted By": "={{ $json.countedBy }}",
+            "Item": "={{ [$json.itemId] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Count",
+              "displayName": "Count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Qty",
+              "displayName": "Qty",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Counted By",
+              "displayName": "Counted By",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Item",
+              "displayName": "Item",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "a6a72e0b-f1eb-4517-8449-4d7fe51d0ee8",
+      "name": "Save Count",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        3360,
+        0
+      ],
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "n",
+              "leftValue": "={{ $(\"Split Counted Items\").item.json.packs }}",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "rightValue": 0
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ae3dd6a9-e0ca-4e01-90c1-16d6c7404f2c",
+      "name": "Needs Order?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        3584,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Order Lines"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Line": "={{ $(\"Split Counted Items\").item.json.item }}",
+            "Order": "={{ [$(\"Split Counted Items\").item.json.orderId] }}",
+            "Item": "={{ [$(\"Split Counted Items\").item.json.itemId] }}",
+            "On Hand": "={{ $(\"Split Counted Items\").item.json.onHand }}",
+            "Coverage Days": "={{ $(\"Split Counted Items\").item.json.coverageDays }}",
+            "Suggested Packs": "={{ $(\"Split Counted Items\").item.json.packs }}",
+            "Final Packs": "={{ $(\"Split Counted Items\").item.json.packs }}",
+            "Source": "Count"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Line",
+              "displayName": "Line",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Order",
+              "displayName": "Order",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Item",
+              "displayName": "Item",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "array",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "On Hand",
+              "displayName": "On Hand",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Coverage Days",
+              "displayName": "Coverage Days",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Suggested Packs",
+              "displayName": "Suggested Packs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Final Packs",
+              "displayName": "Final Packs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Source",
+              "displayName": "Source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "c2fbf975-cc1a-43e7-b04c-2e18160bf7d6",
+      "name": "Create Order Line",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        3808,
+        0
+      ],
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d1",
+              "name": "orderLines",
+              "type": "number",
+              "value": "={{ $(\"Prepare Order\").first().json.countedRows.filter(r => r.packs > 0).length }}"
+            },
+            {
+              "id": "d2",
+              "name": "message",
+              "type": "string",
+              "value": "=<b>טיוטת הזמנה – {{ $(\"Prepare Order\").first().json.supplier }}</b>\nאספקה: {{ DateTime.fromISO($(\"Prepare Order\").first().json.deliveryDate).toFormat(\"dd/MM\") }} · מכסה {{ $(\"Prepare Order\").first().json.countedRows[0].coverageDays }} ימים עד המשלוח הבא\n\n{{ $(\"Prepare Order\").first().json.countedRows.filter(r => r.packs > 0).map(r => \"• \" + r.item + \": \" + r.packs + \" × \" + r.packName + \" (נספרו \" + r.onHand + \" \" + r.unit + \", צריכה \" + r.dailyUsage + \" ליום)\").join(\"\\n\") || \"אין מה להזמין לפי הספירה.\" }}{{ $(\"Prepare Order\").first().json.countedRows.some(r => r.packs === 0) ? \"\\n\\nלא צריך להזמין: \" + $(\"Prepare Order\").first().json.countedRows.filter(r => r.packs === 0).map(r => r.item).join(\", \") : \"\" }}{{ $(\"Prepare Order\").first().json.notCounted.length ? \"\\n\\n<b>לא נספרו:</b> \" + $(\"Prepare Order\").first().json.notCounted.join(\", \") : \"\" }}{{ $(\"Prepare Order\").first().json.unknownNames.length ? \"\\n<b>לא זוהו בספירה:</b> \" + $(\"Prepare Order\").first().json.unknownNames.join(\", \").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") : \"\" }}\n\nהטיוטה שמורה ב-Airtable ועוד לא נשלחה לספק. לאירוע או לספיישל אפשר להוסיף שורה ידנית."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7d4b568f-cbf8-4525-a5e4-92e6da5f0691",
+      "name": "Build Draft Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3136,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "33b63611-23f5-4b32-815a-e796c2c7a61d",
+      "name": "Send Draft to Manager",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3360,
+        192
+      ],
+      "retryOnFail": true,
+      "webhookId": "0ae03f14-7534-4cbd-8cd5-f02dd5b98054"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"draft\", \"order\": $(\"Attach Order Id\").first().json.orderName, \"lines\": $(\"Build Draft Message\").first().json.orderLines, \"notCounted\": $(\"Prepare Order\").first().json.notCounted, \"unknown\": $(\"Prepare Order\").first().json.unknownNames } }}",
+        "options": {}
+      },
+      "id": "2feac917-1067-4452-b102-b11941b147c0",
+      "name": "Respond With Draft",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        3584,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## DEMO R1b - Count to Order Draft\nספירה של ספק אחד (Webhook) -> Validate Count -> Get Supplier -> הפריטים שלו -> כמות מוצעת: צריכה יומית × ימים עד המשלוח הבא + מלאי ביטחון − מה שנספר, מעוגל ליחידת קנייה -> טיוטה ב-Airtable (Orders, Counts, Order Lines) -> הודעה למנהל.\nקלט שבור, ספק לא מוכר או ספירה בלי אף פריט מוכר -> Stop and Error -> התראה.\nבעבודה אמיתית: הספירה מגיעה מתשובה בוואטסאפ.\nצריך: Airtable, Telegram.",
+        "height": 300,
+        "width": 640,
+        "color": 4
+      },
+      "id": "f6778140-05f7-4550-9dbd-849eafd5141c",
+      "name": "Sticky Note 0815ce0f",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -368
+      ]
+    }
+  ],
+  "connections": {
+    "Count Received": {
+      "main": [
+        [
+          {
+            "node": "Read Count Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Count Message": {
+      "main": [
+        [
+          {
+            "node": "Validate Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Count": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Get Supplier",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Invalid Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Supplier": {
+      "main": [
+        [
+          {
+            "node": "Supplier Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supplier Found?": {
+      "main": [
+        [
+          {
+            "node": "Get Supplier Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Unknown Supplier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Supplier Items": {
+      "main": [
+        [
+          {
+            "node": "Match Count To Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Match Count To Item": {
+      "main": [
+        [
+          {
+            "node": "Calculate Suggestion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Suggestion": {
+      "main": [
+        [
+          {
+            "node": "Collect Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Rows": {
+      "main": [
+        [
+          {
+            "node": "Prepare Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Order": {
+      "main": [
+        [
+          {
+            "node": "Any Item Matched?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any Item Matched?": {
+      "main": [
+        [
+          {
+            "node": "Create Draft Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Unmatched Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Draft Order": {
+      "main": [
+        [
+          {
+            "node": "Attach Order Id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Order Id": {
+      "main": [
+        [
+          {
+            "node": "Split Counted Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Draft Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Counted Items": {
+      "main": [
+        [
+          {
+            "node": "Save Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Count": {
+      "main": [
+        [
+          {
+            "node": "Needs Order?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Order?": {
+      "main": [
+        [
+          {
+            "node": "Create Order Line",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Draft Message": {
+      "main": [
+        [
+          {
+            "node": "Send Draft to Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Draft to Manager": {
+      "main": [
+        [
+          {
+            "node": "Respond With Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jerusalem"
+  },
+  "pinData": {}
+}

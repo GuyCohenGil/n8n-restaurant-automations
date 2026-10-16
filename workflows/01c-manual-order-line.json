@@ -1,0 +1,824 @@
+{
+  "name": "DEMO R1c - Manual Order Line",
+  "nodes": [
+    {
+      "id": "a8706c6f-072a-4b7e-8650-8af34ea85eb5",
+      "name": "Manual Line Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        96
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "demo-r1-manual",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "7b5db6b1-8d25-414b-a67f-ef1558467d37"
+    },
+    {
+      "id": "2b4808bc-3f2c-432c-96af-cddd779e4f17",
+      "name": "Read Manual Line",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        96
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "supplier",
+              "type": "string",
+              "value": "={{ String($json.body?.supplier ?? \"\").trim() }}"
+            },
+            {
+              "id": "r2",
+              "name": "item",
+              "type": "string",
+              "value": "={{ String($json.body?.item ?? \"\").trim() }}"
+            },
+            {
+              "id": "r3",
+              "name": "packs",
+              "type": "number",
+              "value": "={{ Number($json.body?.packs) || 0 }}"
+            },
+            {
+              "id": "r4",
+              "name": "reason",
+              "type": "string",
+              "value": "={{ String($json.body?.reason ?? \"\").trim() }}"
+            },
+            {
+              "id": "r5",
+              "name": "note",
+              "type": "string",
+              "value": "={{ String($json.body?.note ?? \"\").trim() }}"
+            },
+            {
+              "id": "r6",
+              "name": "validationError",
+              "type": "string",
+              "value": "={{ [!String($json.body?.supplier ?? \"\").trim() ? \"חסר ספק\" : \"\", !String($json.body?.item ?? \"\").trim() ? \"חסר פריט\" : \"\", !(Number($json.body?.packs) > 0) ? \"כמות חייבת להיות גדולה מ-0\" : \"\", ![\"אירוע\", \"ספיישל\", \"אחר\"].includes(String($json.body?.reason ?? \"\").trim()) ? \"סיבה חייבת להיות אירוע, ספיישל או אחר\" : \"\"].filter(e => e).join(\"; \") }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "05d3f090-db1f-440c-aee8-a64c9a1d2883",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json.validationError }}",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "da87f79b-ec36-45aa-b310-41e67a71afc7",
+      "name": "Get Item Of Supplier",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        96
+      ],
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Items"
+        },
+        "filterByFormula": "=AND({Active}, {Item} = \"{{ $json.item.replace(/\"/g, \"\") }}\", FIND(\"{{ $json.supplier.replace(/\"/g, \"\") }}\", ARRAYJOIN({Supplier Name})))",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "retryOnFail": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "19d778ad-3bd4-456d-8854-74ed4efbd6de",
+      "name": "Item Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f",
+              "leftValue": "={{ $json.id ?? \"\" }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "79221480-4fb6-4736-a309-ed91d0c50de0",
+      "name": "Get Today's Draft",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        96
+      ],
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Orders"
+        },
+        "filterByFormula": "=AND({Status} = \"Draft\", FIND(\"{{ $(\"Read Manual Line\").first().json.supplier.replace(/\"/g, \"\") }}\", ARRAYJOIN({Supplier})), DATETIME_FORMAT({Order Date}, \"YYYY-MM-DD\") = \"{{ $now.setZone(\"Asia/Jerusalem\").toFormat(\"yyyy-MM-dd\") }}\")",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "retryOnFail": true,
+      "alwaysOutputData": true
+    },
+    {
+      "id": "40e5bfd9-4017-4077-accb-b7300efaa996",
+      "name": "Draft Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d",
+              "leftValue": "={{ $json.id ?? \"\" }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ba7e4630-91d1-47b8-b671-5637ffb3ef62",
+      "name": "Use Existing Draft",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1568,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "u1",
+              "name": "orderId",
+              "type": "string",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "id": "u2",
+              "name": "orderName",
+              "type": "string",
+              "value": "={{ $json.fields?.Order ?? \"\" }}"
+            },
+            {
+              "id": "u3",
+              "name": "newOrder",
+              "type": "boolean",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ade19436-16bb-4249-aedb-0af6a036a9c2",
+      "name": "Create Manual Line",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        96
+      ],
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Order Lines"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Line": "={{ $(\"Read Manual Line\").first().json.item }}{{ $(\"Read Manual Line\").first().json.note ? \" – \" + $(\"Read Manual Line\").first().json.note : \"\" }}",
+            "Order": "={{ [$json.orderId] }}",
+            "Item": "={{ [$(\"Get Item Of Supplier\").first().json.id] }}",
+            "Final Packs": "={{ $(\"Read Manual Line\").first().json.packs }}",
+            "Source": "Manual",
+            "Reason": "={{ $(\"Read Manual Line\").first().json.reason }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false,
+              "id": "Line",
+              "displayName": "Line",
+              "type": "string"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false,
+              "id": "Order",
+              "displayName": "Order",
+              "type": "array"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false,
+              "id": "Item",
+              "displayName": "Item",
+              "type": "array"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false,
+              "id": "Final Packs",
+              "displayName": "Final Packs",
+              "type": "number"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false,
+              "id": "Source",
+              "displayName": "Source",
+              "type": "string"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false,
+              "id": "Reason",
+              "displayName": "Reason",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "retryOnFail": true
+    },
+    {
+      "id": "afa49731-02ea-49ba-a696-83f1c8e4544b",
+      "name": "Get Supplier",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1568,
+        192
+      ],
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "resource": "record",
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Suppliers"
+        },
+        "filterByFormula": "={Supplier} = \"{{ $(\"Read Manual Line\").first().json.supplier.replace(/\"/g, \"\") }}\"",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "retryOnFail": true
+    },
+    {
+      "id": "e999e9b7-9079-4334-8cd9-818b35c7cbc7",
+      "name": "Create Off-Schedule Draft",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1792,
+        192
+      ],
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "resource": "record",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "id",
+          "value": "Orders"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Order": "={{ $json.fields.Supplier }} – {{ $now.setZone(\"Asia/Jerusalem\").toFormat(\"dd/MM\") }} (ידני)",
+            "Order Date": "={{ $now.setZone(\"Asia/Jerusalem\").toFormat(\"yyyy-MM-dd\") }}",
+            "Delivery Date": "={{ $now.setZone(\"Asia/Jerusalem\").plus({ days: $json.fields[\"Lead Days\"] || 1 }).toFormat(\"yyyy-MM-dd\") }}",
+            "Status": "Draft",
+            "Supplier": "={{ [$json.id] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false,
+              "id": "Order",
+              "displayName": "Order",
+              "type": "string"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false,
+              "id": "Order Date",
+              "displayName": "Order Date",
+              "type": "dateTime"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false,
+              "id": "Delivery Date",
+              "displayName": "Delivery Date",
+              "type": "dateTime"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false,
+              "id": "Status",
+              "displayName": "Status",
+              "type": "string"
+            },
+            {
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false,
+              "id": "Supplier",
+              "displayName": "Supplier",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "retryOnFail": true
+    },
+    {
+      "id": "fbd7fcd4-f766-4da1-810f-93f3f51bf755",
+      "name": "Use New Draft",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2016,
+        192
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "n1",
+              "name": "orderId",
+              "type": "string",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "id": "n2",
+              "name": "orderName",
+              "type": "string",
+              "value": "={{ $json.fields?.Order ?? \"\" }}"
+            },
+            {
+              "id": "n3",
+              "name": "newOrder",
+              "type": "boolean",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "be6a1be1-8e65-46a0-ac3a-c0a5e54c02b2",
+      "name": "Reject Unknown Item",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        288
+      ],
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "=הפריט \"{{ $(\"Read Manual Line\").first().json.item }}\" לא נמצא אצל הספק {{ $(\"Read Manual Line\").first().json.supplier }}"
+      }
+    },
+    {
+      "id": "6e213afc-78a6-4eba-87ad-40f10cbdeb83",
+      "name": "Reject Invalid Line",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        672,
+        288
+      ],
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "=שורה ידנית לא תקינה: {{ $json.validationError }}"
+      }
+    },
+    {
+      "id": "53266215-dd60-4282-857d-6b2a4bd1fc6a",
+      "name": "Build Confirmation",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2464,
+        96
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1",
+              "name": "message",
+              "type": "string",
+              "value": "=<b>נוספה שורה ידנית – {{ $(\"Read Manual Line\").first().json.supplier }}</b>\n• {{ $(\"Read Manual Line\").first().json.item.replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") }}: {{ $(\"Read Manual Line\").first().json.packs }} × {{ $(\"Get Item Of Supplier\").first().json.fields[\"Pack Name\"] }} ({{ $(\"Read Manual Line\").first().json.reason }}){{ $(\"Read Manual Line\").first().json.note ? \"\\n\" + $(\"Read Manual Line\").first().json.note.replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\") : \"\" }}\n\n{{ $(\"Use New Draft\").isExecuted ? \"נפתחה טיוטה חדשה מחוץ ליום ההזמנה הרגיל.\" : \"נוסף לטיוטה של היום.\" }} הכמות לא נכנסת לחישוב הצריכה היומית."
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f035d663-b2fd-44cf-a827-65c9daed124b",
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2688,
+        96
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "retryOnFail": true,
+      "webhookId": "52f3c90e-2685-406c-858e-65b4dc4ba60e"
+    },
+    {
+      "id": "6f7a7306-b261-48fa-9344-32b46b425338",
+      "name": "Respond With Line",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2912,
+        96
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"added\", \"lineId\": $(\"Create Manual Line\").first().json.id, \"reason\": $(\"Read Manual Line\").first().json.reason } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "3db6d7b3-83aa-4988-b23e-4d97e25982ae",
+      "name": "Sticky Note 372d5d70",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -360
+      ],
+      "parameters": {
+        "content": "## DEMO R1c - Manual Order Line\nשורה ידנית לאירוע או לספיישל (Webhook) -> Is Valid? (ספק, פריט, כמות, סיבה) -> הפריט אצל הספק -> טיוטת היום של הספק, או טיוטה חדשה מחוץ ליום ההזמנה -> Order Line עם Source=Manual וסיבה -> אישור למנהל.\nשורות עם סיבה לא נכנסות לחישוב הצריכה היומית.\nבעבודה אמיתית: הודעה חופשית בוואטסאפ, שה-AI מפרק לשדות.\nצריך: Airtable, Telegram.",
+        "color": 4,
+        "width": 640,
+        "height": 300
+      }
+    }
+  ],
+  "connections": {
+    "Manual Line Received": {
+      "main": [
+        [
+          {
+            "node": "Read Manual Line",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Manual Line": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Get Item Of Supplier",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Invalid Line",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Item Of Supplier": {
+      "main": [
+        [
+          {
+            "node": "Item Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Item Found?": {
+      "main": [
+        [
+          {
+            "node": "Get Today's Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Unknown Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Today's Draft": {
+      "main": [
+        [
+          {
+            "node": "Draft Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Exists?": {
+      "main": [
+        [
+          {
+            "node": "Use Existing Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Supplier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Existing Draft": {
+      "main": [
+        [
+          {
+            "node": "Create Manual Line",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Manual Line": {
+      "main": [
+        [
+          {
+            "node": "Build Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Supplier": {
+      "main": [
+        [
+          {
+            "node": "Create Off-Schedule Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Off-Schedule Draft": {
+      "main": [
+        [
+          {
+            "node": "Use New Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use New Draft": {
+      "main": [
+        [
+          {
+            "node": "Create Manual Line",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Respond With Line",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jerusalem"
+  },
+  "pinData": {}
+}
